@@ -16,10 +16,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-# Enables async LLM labeling via the Claude API
-llm = ["dep:tokio", "dep:reqwest", "dep:base64"]
-# Enables the CLI binary; pulls in llm so the binary has the full feature set
-cli = ["dep:clap", "llm"]
+cli = ["dep:clap"]
 
 [dependencies]
 image = "0.25"
@@ -27,7 +24,4 @@ imageproc = "0.26"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
-clap    = { version = "4", features = ["derive"], optional = true }
-tokio   = { version = "1", features = ["full"],   optional = true }
-reqwest = { version = "0.12", features = ["json"], optional = true }
-base64  = { version = "0.22",                      optional = true }
+clap = { version = "4", features = ["derive"], optional = true }

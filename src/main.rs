@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use img2glyph::{
-    agl_name, extract_glyph, manifest::{GlyphEntry, Manifest}, populate_glyph_names,
-    segment_image, SegmentConfig,
+    agl_name, extract_glyph, manifest::{GlyphEntry, Manifest},
+    populate_glyph_names, segment_image, SegmentConfig,
 };
 use std::path::{Path, PathBuf};
 
@@ -30,10 +30,6 @@ enum Commands {
         /// Output directory for glyph PNGs and manifest.json
         #[arg(short, long, default_value = "glyphs")]
         output: PathBuf,
-        /// Call the Claude API to label every glyph with its Unicode codepoint.
-        /// Requires ANTHROPIC_API_KEY to be set in the environment.
-        #[arg(long)]
-        llm: bool,
         /// Padding in pixels added around each cropped glyph
         #[arg(long, default_value_t = 10)]
         padding: u32,
@@ -62,22 +58,17 @@ enum Commands {
         ///   Per-glyph (explicit mapping):
         ///   {"glyph_0001": {"unicode": "U+0041", "name": "LATIN CAPITAL LETTER A"}}
         #[arg(long)]
-        assignments: Option<PathBuf>,
-        /// Call the Claude API to label all unlabeled glyphs.
-        /// Requires ANTHROPIC_API_KEY to be set in the environment.
-        #[arg(long)]
-        llm: bool,
+        assignments: PathBuf,
     },
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Process { image, output, llm, padding, min_area, max_area, block_radius } =>
-            cmd_process(image, output, llm, padding, min_area, max_area, block_radius).await,
-        Commands::Label { manifest, assignments, llm } =>
-            cmd_label(manifest, assignments, llm).await,
+        Commands::Process { image, output, padding, min_area, max_area, block_radius } =>
+            cmd_process(image, output, padding, min_area, max_area, block_radius),
+        Commands::Label { manifest, assignments } =>
+            cmd_label(manifest, assignments),
     }
 }
 
@@ -85,10 +76,9 @@ async fn main() -> Result<()> {
 // process
 // ---------------------------------------------------------------------------
 
-async fn cmd_process(
+fn cmd_process(
     image_path: PathBuf,
     output_dir: PathBuf,
-    use_llm: bool,
     padding: u32,
     min_area: u32,
     max_area: u32,
@@ -132,16 +122,6 @@ async fn cmd_process(
     }
 
     eprintln!("Extracted {} glyphs → {}", entries.len(), output_dir.display());
-
-    if use_llm {
-        let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .context("ANTHROPIC_API_KEY is not set")?;
-        eprintln!("Labeling with Claude API…");
-        img2glyph::llm::label_all(&mut entries, &output_dir, &api_key).await?;
-        populate_glyph_names(&mut entries);
-        rename_labeled(&mut entries, &output_dir)?;
-    }
-
     write_manifest(&output_dir, &image_path, entries)?;
     Ok(())
 }
@@ -150,11 +130,7 @@ async fn cmd_process(
 // label
 // ---------------------------------------------------------------------------
 
-async fn cmd_label(
-    manifest_path: PathBuf,
-    assignments_path: Option<PathBuf>,
-    use_llm: bool,
-) -> Result<()> {
+fn cmd_label(manifest_path: PathBuf, assignments_path: PathBuf) -> Result<()> {
     let json = std::fs::read_to_string(&manifest_path)
         .with_context(|| format!("Cannot read {}", manifest_path.display()))?;
     let mut manifest: Manifest = serde_json::from_str(&json)
@@ -162,28 +138,7 @@ async fn cmd_label(
 
     let output_dir = manifest_path.parent().unwrap_or(Path::new(".")).to_path_buf();
 
-    if let Some(path) = assignments_path {
-        apply_assignments(&mut manifest.glyphs, &path, &output_dir)?;
-    }
-
-    if use_llm {
-        let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .context("ANTHROPIC_API_KEY is not set")?;
-
-        let unlabeled: Vec<usize> = manifest.glyphs.iter().enumerate()
-            .filter(|(_, g)| g.unicode.is_none())
-            .map(|(i, _)| i)
-            .collect();
-
-        if unlabeled.is_empty() {
-            eprintln!("All glyphs are already labeled; nothing to do.");
-        } else {
-            eprintln!("Labeling {} unlabeled glyph(s) with Claude API…", unlabeled.len());
-            img2glyph::llm::label_at(&mut manifest.glyphs, &output_dir, &api_key, &unlabeled).await?;
-            populate_glyph_names(&mut manifest.glyphs);
-            rename_labeled(&mut manifest.glyphs, &output_dir)?;
-        }
-    }
+    apply_assignments(&mut manifest.glyphs, &assignments_path, &output_dir)?;
 
     let updated = serde_json::to_string_pretty(&manifest)?;
     std::fs::write(&manifest_path, updated)?;
@@ -192,7 +147,7 @@ async fn cmd_label(
 }
 
 // ---------------------------------------------------------------------------
-// CLI-only helpers
+// helpers
 // ---------------------------------------------------------------------------
 
 fn apply_assignments(

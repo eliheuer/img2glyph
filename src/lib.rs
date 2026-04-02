@@ -3,7 +3,7 @@
 //! # Library usage
 //!
 //! ```no_run
-//! use img2glyph::{SegmentConfig, segment_image, extract_glyph, populate_glyph_names};
+//! use img2glyph::{SegmentConfig, segment_image, extract_glyph};
 //!
 //! let image = image::open("specimen.png").unwrap();
 //! let config = SegmentConfig::default();
@@ -14,18 +14,10 @@
 //!     // glyph_img is a GrayImage cropped from the source
 //! }
 //! ```
-//!
-//! # Features
-//!
-//! - **`llm`** — Enables async LLM labeling via the Claude API (`label_all`, `label_at`).
-//! - **`cli`** — Enables the `img2glyph` binary. Implies `llm`.
 
 pub mod agl;
 pub mod manifest;
 pub mod segment;
-
-#[cfg(feature = "llm")]
-pub mod llm;
 
 pub use agl::agl_name;
 pub use manifest::{BboxRecord, GlyphEntry, Manifest};

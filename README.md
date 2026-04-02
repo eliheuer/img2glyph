@@ -32,9 +32,6 @@ Requires Rust (stable). No external system libraries needed.
 
 ## Development and testing
 
-The repo includes `test.png` — a bold type specimen with uppercase, lowercase, digits, and common punctuation — which is the easiest way to verify the pipeline while working on the code.
-
-![test.png](test.png)
 
 Clone the repo and run directly with `cargo run`:
 
@@ -65,6 +62,10 @@ ls tmp/test-output/*.png
 
 The `tmp/` directory is gitignored, so test output won't show up in commits.
 
+The repo includes `test.png` — a bold type specimen with uppercase, lowercase, digits, and common punctuation — this file is provided as a specimen to verify the pipeline while working on the code.
+
+![test.png](test.png)
+
 ---
 
 ## Library usage
@@ -75,11 +76,8 @@ img2glyph can also be used as a library in other Rust projects. Add it to `Cargo
 # Full library + CLI
 img2glyph = { path = "../img2glyph" }
 
-# Library only — no CLI deps (clap, tokio, reqwest)
+# Library only — no CLI deps (clap)
 img2glyph = { path = "../img2glyph", default-features = false }
-
-# Library with async LLM labeling but no CLI
-img2glyph = { path = "../img2glyph", default-features = false, features = ["llm"] }
 ```
 
 Core API:
@@ -101,8 +99,7 @@ for bbox in &bboxes {
 
 | Feature | Default | Description |
 |---|---|---|
-| `cli` | ✓ | Builds the `img2glyph` binary. Implies `llm`. |
-| `llm` | ✓ | Async LLM labeling via Claude API (`img2glyph::llm`). |
+| `cli` | ✓ | Builds the `img2glyph` binary (requires `clap`). |
 
 ---
 
@@ -159,38 +156,23 @@ For explicit control, map glyph IDs to Unicode codepoints:
 img2glyph label ./glyphs/manifest.json --assignments assignments.json
 ```
 
-#### Option C — Claude API (`--llm`)
-
-Have the Claude vision API identify every glyph automatically:
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Label during segmentation
-img2glyph process specimen.png --output ./glyphs --llm
-
-# Or label an existing manifest (skips already-labeled glyphs)
-img2glyph label ./glyphs/manifest.json --llm
-```
-
-Each glyph image is sent to `claude-opus-4-6`. Confidence scores (0–1) are stored in the manifest.
-
-After labeling, files are renamed using AGL names by default: `glyph_0001.png` → `A.png`, `ampersand.png`, `germandbls.png`, `uni00B6.png` etc.
+After labeling, files are renamed to standard glyph names: `glyph_0001.png` → `A.png`, `ampersand.png`, `germandbls.png`, `uni00B6.png` etc.
 
 ---
 
-## AI agent workflow (Claude Code)
+## LLM workflow
 
-img2glyph ships with a Claude Code skill at `.claude/commands/img2glyph.md`. When working in a Claude Code session, run `/img2glyph` to load the full workflow guide.
+img2glyph is designed to work with any LLM CLI tool — Claude Code, Codex, OpenCode, Hermes, or anything else that can read files and run shell commands. The tool handles the image processing; the LLM handles the part that requires vision.
 
-Claude can then drive the process end-to-end — no separate API key needed:
+The workflow context lives in [`context/workflow.md`](context/workflow.md). Point your LLM tool at that file and it has everything it needs: command reference, assignments format, manifest format, and common troubleshooting.
 
-1. Run `img2glyph process` to get numbered glyph files
-2. Inspect the images using its own vision
-3. Write `assignments.json` based on what it sees
-4. Run `img2glyph label` to apply the names
+A typical session:
 
-This works well for ambiguous or historical type where automated heuristics fall short — Claude can make contextual decisions about ligatures, archaic letterforms, and non-Latin scripts.
+1. Run `img2glyph process` to extract numbered glyph images
+2. Ask your LLM to look at the images and write `assignments.json`
+3. Run `img2glyph label` to apply the names
+
+This works well for ambiguous or historical type where heuristics fall short — the LLM can make contextual decisions about ligatures, archaic letterforms, and non-Latin scripts.
 
 ---
 
@@ -205,12 +187,6 @@ This works well for ambiguous or historical type where automated heuristics fall
 | `--block-radius` | `15` | Adaptive threshold neighborhood radius. Increase for uneven lighting. |
 | `--padding` | `10` | Pixels of whitespace added around each cropped glyph. |
 | `--output` | `glyphs` | Output directory. |
-
-### Labeling
-
-| Flag | Default | Description |
-|---|---|---|
-| `--llm` | off | Call the Claude API to label glyphs. |
 
 ---
 
