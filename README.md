@@ -2,6 +2,10 @@
 
 A Rust CLI tool for turning scanned images of printed type into individual named glyph PNGs — designed for font production pipelines and AI agent workflows.
 
+This project draws on two earlier tools. [Raph Levien's font scanning scripts](https://levien.com/garden/font/) (2007, C/Python) established the core idea: binarize a scanned page, find connected ink components, and crop each one into its own image file. We follow the same basic pipeline but replace the fixed luminance threshold with adaptive thresholding, which handles uneven lighting and paper tone without manual tuning. [GlyphCollector](https://github.com/krksgbr/glyphcollector) takes a different approach — rather than automatic segmentation, it asks you to manually crop one example of each character and then finds every instance across a set of source pages using normalized cross-correlation. That makes it powerful for multi-page revival work where you want every occurrence of a glyph averaged together. img2glyph is simpler and more automated: one image in, one directory of labeled PNGs out, with no manual template step and no GUI required.
+
+<img width="1512" height="982" alt="Image" src="https://github.com/user-attachments/assets/e1a08bae-c897-479e-b40d-beb3de3eb4a7" />
+
 ---
 
 ## How it works
@@ -95,7 +99,7 @@ img2glyph label ./glyphs/manifest.json --llm
 
 Each glyph image is sent to `claude-opus-4-6`. Confidence scores (0–1) are stored in the manifest.
 
-After labeling, files are renamed: `glyph_0001.png` → `U+0041_A.png`, `U+0026_&.png`, etc.
+After labeling, files are renamed using AGL names by default: `glyph_0001.png` → `A.png`, `ampersand.png`, `germandbls.png`, `uni00B6.png` etc.
 
 ---
 
@@ -114,7 +118,9 @@ This works well for ambiguous or historical type where automated heuristics fall
 
 ---
 
-## Segmentation options
+## Options
+
+### Segmentation
 
 | Flag | Default | Description |
 |---|---|---|
@@ -123,19 +129,22 @@ This works well for ambiguous or historical type where automated heuristics fall
 | `--block-radius` | `15` | Adaptive threshold neighborhood radius. Increase for uneven lighting. |
 | `--padding` | `10` | Pixels of whitespace added around each cropped glyph. |
 | `--output` | `glyphs` | Output directory. |
-| `--llm` | off | Call the Claude API to label glyphs during `process`. |
+
+### Labeling
+
+| Flag | Default | Description |
+|---|---|---|
+| `--llm` | off | Call the Claude API to label glyphs. |
 
 ---
 
-## Output format
+## Output
 
-| State | Example filename |
-|---|---|
-| Unlabeled | `glyph_0001.png` |
-| Labeled, printable character | `U+0041_A.png` |
-| Labeled, non-printable | `U+00B6_PILCROW_SIGN.png` |
+Labeled glyph files use standard glyph names: `A.png`, `ampersand.png`, `germandbls.png`, `uni00B6.png`. These are the names Glyphs.app, RoboFont, FontLab, and UFO-based tools use to map an image into a Unicode slot — you can drag the output folder directly into your font editor.
 
-The `manifest.json` is the durable record of the session. It stores bounding boxes, pixel areas, reading-order row/col indices, and Unicode assignments. You can re-label or re-export at any time without re-segmenting.
+Unlabeled glyphs keep their sequential names: `glyph_0001.png`.
+
+The `manifest.json` is the durable record of the session. It stores bounding boxes, pixel areas, reading-order row/col indices, and the full Unicode metadata for every glyph. You can re-label or re-export at any time without re-segmenting.
 
 ```json
 {
@@ -144,13 +153,14 @@ The `manifest.json` is the durable record of the session. It stores bounding box
   "glyphs": [
     {
       "id": "glyph_0001",
-      "file": "U+0041_A.png",
+      "file": "A.png",
       "bbox": { "x": 120, "y": 45, "w": 86, "h": 112 },
       "area_px": 6420,
       "row": 0,
       "col": 0,
       "unicode": "U+0041",
-      "name": "LATIN CAPITAL LETTER A",
+      "glyph_name": "A",
+      "unicode_name": "LATIN CAPITAL LETTER A",
       "confidence": null
     }
   ]
@@ -165,9 +175,3 @@ The `manifest.json` is the durable record of the session. It stores bounding box
 - **Touching characters.** Glyphs that share any pixels are extracted as a single component. This usually means a re-scan or manual crop is needed.
 - **Dotted glyphs split.** The dot on `i`, `j`, `!`, `;`, `:` becomes its own connected component. To handle this: raise `--min-area` to discard the dots entirely, or skip those IDs in your assignments file.
 
----
-
-## References
-
-- [Raph Levien's font scanning tools](https://levien.com/garden/font/) — early C/Python pipeline this draws from
-- [GlyphCollector](https://github.com/krksgbr/glyphcollector) — template-matching approach for multi-page specimens

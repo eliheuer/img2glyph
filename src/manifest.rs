@@ -12,7 +12,7 @@ pub struct Manifest {
 pub struct GlyphEntry {
     /// Sequential ID assigned at segmentation time, e.g. "glyph_0001"
     pub id: String,
-    /// Current filename (changes after labeling), e.g. "U+0041_A.png"
+    /// Current filename (changes after labeling), e.g. "ampersand.png"
     pub file: String,
     /// Bounding box in the source image (before padding)
     pub bbox: BboxRecord,
@@ -24,8 +24,10 @@ pub struct GlyphEntry {
     pub col: u32,
     /// Unicode codepoint string, e.g. "U+0041"
     pub unicode: Option<String>,
-    /// Unicode character name, e.g. "LATIN CAPITAL LETTER A"
-    pub name: Option<String>,
+    /// AGL glyph name used as the filename stem, e.g. "A", "ampersand", "uni00B6"
+    pub glyph_name: Option<String>,
+    /// Full Unicode character name, e.g. "LATIN CAPITAL LETTER A"
+    pub unicode_name: Option<String>,
     /// Labeling confidence 0.0–1.0 (set when using --llm)
     pub confidence: Option<f32>,
 }

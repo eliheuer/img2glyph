@@ -36,10 +36,10 @@ pub async fn label_at(
         eprint!("  [{}/{}] {}... ", progress + 1, total, id);
 
         match identify_glyph(&client, api_key, &png_bytes).await {
-            Ok((unicode, name, confidence)) => {
+            Ok((unicode, unicode_name, confidence)) => {
                 eprintln!("{} ({})", unicode, confidence);
                 glyphs[idx].unicode = Some(unicode);
-                glyphs[idx].name = Some(name);
+                glyphs[idx].unicode_name = Some(unicode_name);
                 glyphs[idx].confidence = Some(confidence);
             }
             Err(e) => {
