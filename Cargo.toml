@@ -1,0 +1,21 @@
+[package]
+name = "img2glyph"
+version = "0.1.0"
+edition = "2021"
+description = "Convert scanned type specimens into individual named glyph PNGs"
+license = "MIT"
+
+[[bin]]
+name = "img2glyph"
+path = "src/main.rs"
+
+[dependencies]
+image = "0.25"
+imageproc = "0.26"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+base64 = "0.22"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
