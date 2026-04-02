@@ -1,6 +1,6 @@
 # img2glyph
 
-A Rust CLI tool for turning scanned images of printed type into individual named glyph PNGs — designed for font production pipelines and AI agent workflows.
+A Rust CLI tool and library for turning scanned images of printed type into individual named glyph PNGs — designed for font production pipelines and AI agent workflows.
 
 This project draws on two earlier tools. [Raph Levien's font scanning scripts](https://levien.com/garden/font/) (2007, C/Python) established the core idea: binarize a scanned page, find connected ink components, and crop each one into its own image file. We follow the same basic pipeline but replace the fixed luminance threshold with adaptive thresholding, which handles uneven lighting and paper tone without manual tuning. [GlyphCollector](https://github.com/krksgbr/glyphcollector) takes a different approach — rather than automatic segmentation, it asks you to manually crop one example of each character and then finds every instance across a set of source pages using normalized cross-correlation. That makes it powerful for multi-page revival work where you want every occurrence of a glyph averaged together. img2glyph is simpler and more automated: one image in, one directory of labeled PNGs out, with no manual template step and no GUI required.
 
@@ -27,6 +27,45 @@ cargo install --path .
 ```
 
 Requires Rust (stable). No external system libraries needed.
+
+---
+
+## Library usage
+
+img2glyph can also be used as a library in other Rust projects. Add it to `Cargo.toml`:
+
+```toml
+# Full library + CLI
+img2glyph = { path = "../img2glyph" }
+
+# Library only — no CLI deps (clap, tokio, reqwest)
+img2glyph = { path = "../img2glyph", default-features = false }
+
+# Library with async LLM labeling but no CLI
+img2glyph = { path = "../img2glyph", default-features = false, features = ["llm"] }
+```
+
+Core API:
+
+```rust
+use img2glyph::{SegmentConfig, segment_image, extract_glyph, populate_glyph_names};
+
+let image = image::open("specimen.png")?;
+let config = SegmentConfig::default();
+
+let bboxes = img2glyph::segment_image(&image, &config);
+for bbox in &bboxes {
+    let glyph_png = img2glyph::extract_glyph(&image, bbox, config.padding);
+    // glyph_png is a GrayImage — save it, pass it on, or feed it to img2bez
+}
+```
+
+### Features
+
+| Feature | Default | Description |
+|---|---|---|
+| `cli` | ✓ | Builds the `img2glyph` binary. Implies `llm`. |
+| `llm` | ✓ | Async LLM labeling via Claude API (`img2glyph::llm`). |
 
 ---
 
