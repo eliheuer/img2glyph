@@ -30,6 +30,43 @@ Requires Rust (stable). No external system libraries needed.
 
 ---
 
+## Development and testing
+
+The repo includes `test.png` — a bold type specimen with uppercase, lowercase, digits, and common punctuation — which is the easiest way to verify the pipeline while working on the code.
+
+![test.png](test.png)
+
+Clone the repo and run directly with `cargo run`:
+
+```bash
+git clone https://github.com/eliheuer/img2glyph
+cd img2glyph
+cargo run -- process test.png --output tmp/test-output --min-area 2000
+```
+
+The `--min-area 2000` flag is appropriate for this specimen because the type is large and bold. For smaller or lighter scans you'd lower it.
+
+Check the output:
+
+```bash
+ls tmp/test-output/
+# glyph_0001.png  glyph_0002.png  …  manifest.json
+```
+
+Apply labels from a sequence string to verify the full labeling pipeline:
+
+```bash
+echo '{"sequence":"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"}' \
+  > tmp/assignments.json
+cargo run -- label tmp/test-output/manifest.json --assignments tmp/assignments.json
+ls tmp/test-output/*.png
+# A.png  B.png  C.png  …  z.png  zero.png  one.png  …
+```
+
+The `tmp/` directory is gitignored, so test output won't show up in commits.
+
+---
+
 ## Library usage
 
 img2glyph can also be used as a library in other Rust projects. Add it to `Cargo.toml`:
