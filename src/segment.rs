@@ -1,7 +1,12 @@
-use image::{GrayImage, Luma};
+use image::{GrayImage, ImageBuffer, Luma};
 use imageproc::contrast::adaptive_threshold;
+use imageproc::distance_transform::Norm;
+use imageproc::morphology::dilate;
 use imageproc::region_labelling::{connected_components, Connectivity};
 use std::collections::HashMap;
+
+/// Label image type: one u32 label per pixel from connected-component analysis.
+pub type LabelImage = ImageBuffer<Luma<u32>, Vec<u32>>;
 
 /// Bounding box of a segmented glyph, with reading-order coordinates.
 #[derive(Debug, Clone)]
@@ -20,6 +25,8 @@ pub struct GlyphBbox {
     pub row: u32,
     /// Column index within row, assigned by reading-order sort
     pub col: u32,
+    /// Connected-component label in the label image.
+    pub label: u32,
 }
 
 /// Find all glyph bounding boxes in a grayscale image.
@@ -31,7 +38,7 @@ pub fn find_glyphs(
     min_area: u32,
     max_area: u32,
     block_radius: u32,
-) -> Vec<GlyphBbox> {
+) -> (Vec<GlyphBbox>, LabelImage) {
     // Binary image: paper → 255 (background), ink → 0 (foreground).
     // c=0: threshold equals the local mean (standard adaptive binarization).
     let binary = adaptive_threshold(gray, block_radius, 0);
@@ -58,9 +65,9 @@ pub fn find_glyphs(
     }
 
     let mut glyphs: Vec<GlyphBbox> = bounds
-        .values()
-        .filter(|(_, _, _, _, area)| *area >= min_area && *area <= max_area)
-        .map(|(x0, y0, x1, y1, area)| GlyphBbox {
+        .iter()
+        .filter(|(_, (_, _, _, _, area))| *area >= min_area && *area <= max_area)
+        .map(|(label, (x0, y0, x1, y1, area))| GlyphBbox {
             x: *x0,
             y: *y0,
             w: x1 - x0 + 1,
@@ -68,21 +75,63 @@ pub fn find_glyphs(
             area: *area,
             row: 0,
             col: 0,
+            label: *label,
         })
         .collect();
 
     assign_reading_order(&mut glyphs);
-    glyphs
+    (glyphs, labels)
 }
 
 /// Crop a single glyph from the source image, adding `padding` pixels on each side.
-pub fn extract_glyph(gray: &GrayImage, bbox: &GlyphBbox, padding: u32) -> GrayImage {
+///
+/// Pixels that belong to other connected components (neighbouring glyphs)
+/// are set to white (255) so only the target glyph's ink remains.
+pub fn extract_glyph(
+    gray: &GrayImage,
+    bbox: &GlyphBbox,
+    padding: u32,
+    labels: &LabelImage,
+) -> GrayImage {
     let (img_w, img_h) = gray.dimensions();
     let x0 = bbox.x.saturating_sub(padding);
     let y0 = bbox.y.saturating_sub(padding);
     let x1 = (bbox.x + bbox.w + padding).min(img_w);
     let y1 = (bbox.y + bbox.h + padding).min(img_h);
-    image::imageops::crop_imm(gray, x0, y0, x1 - x0, y1 - y0).to_image()
+
+    let crop_w = x1 - x0;
+    let crop_h = y1 - y0;
+    let mut out = GrayImage::new(crop_w, crop_h);
+
+    // Build a binary mask of the target component, then dilate it by a few
+    // pixels to capture anti-aliased edges that the adaptive threshold missed.
+    let mut mask = GrayImage::new(crop_w, crop_h);
+    for cy in 0..crop_h {
+        for cx in 0..crop_w {
+            let src_x = x0 + cx;
+            let src_y = y0 + cy;
+            if labels.get_pixel(src_x, src_y)[0] == bbox.label {
+                mask.put_pixel(cx, cy, Luma([255u8]));
+            }
+        }
+    }
+    let mask = dilate(&mask, Norm::LInf, 8);
+
+    // Output original grayscale where the dilated mask covers (glyph + edges),
+    // pure white everywhere else (clean background for downstream thresholding).
+    for cy in 0..crop_h {
+        for cx in 0..crop_w {
+            if mask.get_pixel(cx, cy)[0] > 0 {
+                let src_x = x0 + cx;
+                let src_y = y0 + cy;
+                out.put_pixel(cx, cy, *gray.get_pixel(src_x, src_y));
+            } else {
+                out.put_pixel(cx, cy, Luma([255u8]));
+            }
+        }
+    }
+
+    out
 }
 
 /// Sort glyphs into reading order (top→bottom, left→right) and assign row/col indices.

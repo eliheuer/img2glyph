@@ -21,7 +21,7 @@ pub mod segment;
 
 pub use agl::agl_name;
 pub use manifest::{BboxRecord, GlyphEntry, Manifest};
-pub use segment::GlyphBbox;
+pub use segment::{GlyphBbox, LabelImage};
 
 /// Configuration for the segmentation pipeline.
 ///
@@ -51,21 +51,25 @@ impl Default for SegmentConfig {
 
 /// Segment a type specimen image into individual glyph bounding boxes.
 ///
-/// Returns bounding boxes sorted in reading order (top→bottom, left→right).
-/// Use [`extract_glyph`] to crop each one from the source image.
-pub fn segment_image(image: &image::DynamicImage, config: &SegmentConfig) -> Vec<GlyphBbox> {
+/// Returns bounding boxes sorted in reading order (top→bottom, left→right)
+/// and the connected-component label image (needed by [`extract_glyph`]).
+pub fn segment_image(image: &image::DynamicImage, config: &SegmentConfig) -> (Vec<GlyphBbox>, LabelImage) {
     let gray = image.to_luma8();
     segment::find_glyphs(&gray, config.min_area, config.max_area, config.block_radius)
 }
 
 /// Crop a single glyph from a source image, adding `padding` pixels on each side.
+///
+/// Uses the label image from [`segment_image`] to mask out neighbouring glyphs,
+/// so only the target connected component's ink appears in the output.
 pub fn extract_glyph(
     image: &image::DynamicImage,
     bbox: &GlyphBbox,
     padding: u32,
+    labels: &LabelImage,
 ) -> image::GrayImage {
     let gray = image.to_luma8();
-    segment::extract_glyph(&gray, bbox, padding)
+    segment::extract_glyph(&gray, bbox, padding, labels)
 }
 
 /// Fill in the `glyph_name` field (AGL name) for every entry that has a Unicode codepoint.

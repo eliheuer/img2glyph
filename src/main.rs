@@ -93,7 +93,7 @@ fn cmd_process(
 
     eprintln!("Segmenting…");
     let config = SegmentConfig { min_area, max_area, block_radius, padding };
-    let bboxes = segment_image(&img, &config);
+    let (bboxes, labels) = segment_image(&img, &config);
     eprintln!("Found {} glyph candidates", bboxes.len());
 
     let mut entries: Vec<GlyphEntry> = Vec::with_capacity(bboxes.len());
@@ -103,7 +103,7 @@ fn cmd_process(
         let filename = format!("{}.png", id);
         let out_path = output_dir.join(&filename);
 
-        let cropped = extract_glyph(&img, bbox, padding);
+        let cropped = extract_glyph(&img, bbox, padding, &labels);
         cropped.save(&out_path)
             .with_context(|| format!("Cannot save {}", out_path.display()))?;
 
